@@ -82,7 +82,7 @@ The backend calls the LLM with a system prompt that instructs it to output raw E
 ### Install
 
 ```bash
-git clone https://github.com/your-username/amazon-nova
+git clone https://github.com/getrichthroughcode/amazon-nova
 cd amazon-nova
 uv sync
 ```
