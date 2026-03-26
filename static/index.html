@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Excalidraw Agent</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8f9fa;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        background: #fff;
+        border-bottom: 1px solid #e9ecef;
+        padding: 12px 20px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      header h1 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1e1e2e;
+        margin-right: 8px;
+      }
+
+      #prompt-input {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 15px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      #prompt-input:focus {
+        border-color: #4a9eed;
+      }
+      #prompt-input:disabled {
+        background: #f1f3f5;
+        color: #868e96;
+      }
+
+      #draw-btn {
+        padding: 10px 20px;
+        background: #4a9eed;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          opacity 0.15s;
+        white-space: nowrap;
+      }
+
+      #draw-btn:hover:not(:disabled) {
+        background: #2b83d8;
+      }
+      #draw-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      #model-select {
+        padding: 10px 12px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        background: #fff;
+        color: #1e1e2e;
+        cursor: pointer;
+        outline: none;
+        max-width: 220px;
+      }
+      #model-select:focus {
+        border-color: #4a9eed;
+      }
+
+      #clear-btn {
+        padding: 10px 16px;
+        background: #fff;
+        color: #495057;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 15px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+        white-space: nowrap;
+      }
+
+      #clear-btn:hover {
+        border-color: #adb5bd;
+      }
+
+      #status {
+        font-size: 13px;
+        color: #868e96;
+        white-space: nowrap;
+      }
+
+      #status.drawing {
+        color: #4a9eed;
+      }
+      #status.done {
+        color: #22c55e;
+      }
+      #status.error {
+        color: #ef4444;
+      }
+
+      #canvas-wrapper {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+      }
+
+      #excalidraw-container {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>✦ Diagram Agent</h1>
+      <select id="model-select">
+        <optgroup label="Free (Groq)">
+          <option value="groq/llama-3.3-70b-versatile" selected>
+            Llama 3.3 70B (Groq)
+          </option>
+          <option value="groq/llama-3.1-8b-instant">
+            Llama 3.1 8B (Groq, fast)
+          </option>
+          <option value="groq/mixtral-8x7b-32768">Mixtral 8x7B (Groq)</option>
+        </optgroup>
+        <optgroup label="Free (OpenRouter)">
+          <option value="openrouter/meta-llama/llama-3.3-70b-instruct:free">
+            Llama 3.3 70B (OpenRouter)
+          </option>
+          <option value="openrouter/mistralai/mistral-7b-instruct:free">
+            Mistral 7B (OpenRouter)
+          </option>
+          <option value="openrouter/google/gemma-3-27b-it:free">
+            Gemma 3 27B (OpenRouter)
+          </option>
+        </optgroup>
+        <optgroup label="Local (Ollama)">
+          <option value="ollama/llama3.2">Llama 3.2 (Ollama local)</option>
+          <option value="ollama/mistral">Mistral (Ollama local)</option>
+          <option value="ollama/qwen2.5-coder">
+            Qwen 2.5 Coder (Ollama local)
+          </option>
+        </optgroup>
+        <optgroup label="Paid (si tu veux tester)">
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+          <option value="gpt-4o-mini">GPT-4o Mini</option>
+        </optgroup>
+      </select>
+      <input
+        id="prompt-input"
+        type="text"
+        placeholder="Describe a diagram… e.g. 'System architecture for a REST API with auth'"
+      />
+      <button id="draw-btn">Draw</button>
+      <button id="clear-btn">Clear</button>
+      <span id="status">Ready</span>
+    </header>
+
+    <div id="canvas-wrapper">
+      <div id="excalidraw-container"></div>
+    </div>
+
+    <!-- React + Excalidraw via CDN (no build step) -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/excalidraw.production.min.js"></script>
+
+    <script>
+      // ── Excalidraw setup ──────────────────────────────────────────────────────
+      let excalidrawAPI = null;
+      let pendingElements = []; // queue if API not ready yet
+      let sceneElements = {}; // keyed by id to avoid duplicates
+
+      const { createRoot } = ReactDOM;
+      const { Excalidraw } = ExcalidrawLib;
+
+      const ExcalidrawApp = () =>
+        React.createElement(Excalidraw, {
+          excalidrawAPI: (api) => {
+            excalidrawAPI = api;
+            console.log("Excalidraw API ready");
+            // flush any elements that arrived before API was ready
+            if (pendingElements.length > 0) {
+              console.log(
+                "Flushing",
+                pendingElements.length,
+                "pending elements",
+              );
+              pendingElements.forEach(commitElement);
+              pendingElements = [];
+            }
+          },
+        });
+
+      const root = createRoot(document.getElementById("excalidraw-container"));
+      root.render(React.createElement(ExcalidrawApp));
+
+      // ── Scene helpers ─────────────────────────────────────────────────────────
+
+      function idToSeed(id) {
+        let h = 0;
+        for (let i = 0; i < id.length; i++) h = (Math.imul(31, h) + id.charCodeAt(i)) | 0;
+        return Math.abs(h) || 1;
+      }
+
+      function normalizeElement(el) {
+        const base = {
+          angle: 0,
+          strokeColor: "#1e1e1e",
+          backgroundColor: "transparent",
+          fillStyle: "solid",
+          strokeWidth: 2,
+          strokeStyle: "solid",
+          roughness: 1,
+          opacity: 100,
+          isDeleted: false,
+          groupIds: [],
+          frameId: null,
+          boundElements: null,
+          link: null,
+          locked: false,
+          seed: idToSeed(el.id || "x"),
+          version: 1,
+          versionNonce: idToSeed((el.id || "x") + "_n"),
+          updated: Date.now(),
+        };
+        if (el.type === "text") {
+          base.fontFamily = 1;
+          base.lineHeight = 1.25;
+        }
+        return { ...base, ...el };
+      }
+
+      function commitElement(el) {
+        sceneElements[el.id] = normalizeElement(el);
+        try {
+          excalidrawAPI.updateScene({ elements: Object.values(sceneElements) });
+        } catch (e) {
+          console.error("updateScene error:", e, el);
+        }
+      }
+
+      function addElement(el) {
+        if (el.type === "cameraUpdate") {
+          // Use cameraUpdate to set the viewport correctly
+          if (excalidrawAPI) applyCamera(el);
+          return;
+        }
+        if (!excalidrawAPI) {
+          pendingElements.push(el);
+          return;
+        }
+        commitElement(el);
+      }
+
+      function applyCamera(cam) {
+        const wrapper = document.getElementById("canvas-wrapper");
+        const W = wrapper.offsetWidth;
+        const H = wrapper.offsetHeight;
+        const zoom = Math.min(W / cam.width, H / cam.height) * 0.85;
+        excalidrawAPI.updateScene({
+          appState: {
+            zoom: { value: zoom },
+            scrollX: W / 2 / zoom - (cam.x + cam.width / 2),
+            scrollY: H / 2 / zoom - (cam.y + cam.height / 2),
+          },
+        });
+      }
+
+      function clearCanvas() {
+        sceneElements = {};
+        pendingElements = [];
+        if (excalidrawAPI) {
+          excalidrawAPI.updateScene({ elements: [] });
+        }
+      }
+
+      // ── WebSocket ─────────────────────────────────────────────────────────────
+      let ws = null;
+
+      function connectWS() {
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+        ws.onopen = () => setStatus("Connected", "");
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "start") {
+            clearCanvas();
+            setStatus("Drawing…", "drawing");
+          } else if (msg.type === "element") {
+            console.log("element received:", msg.data.type, msg.data.id);
+            addElement(msg.data);
+          } else if (msg.type === "done") {
+            setStatus("Done", "done");
+            setLoading(false);
+          } else if (msg.type === "error") {
+            setStatus("Error: " + msg.message, "error");
+            setLoading(false);
+          }
+        };
+
+        ws.onclose = () => {
+          setStatus("Disconnected — retrying…", "error");
+          setTimeout(connectWS, 2000);
+        };
+        ws.onerror = () => ws.close();
+      }
+
+      connectWS();
+
+      // ── UI controls ───────────────────────────────────────────────────────────
+      const promptInput = document.getElementById("prompt-input");
+      const drawBtn = document.getElementById("draw-btn");
+      const clearBtn = document.getElementById("clear-btn");
+      const statusEl = document.getElementById("status");
+
+      function setStatus(text, cls) {
+        statusEl.textContent = text;
+        statusEl.className = cls;
+      }
+
+      function setLoading(loading) {
+        promptInput.disabled = loading;
+        drawBtn.disabled = loading;
+        drawBtn.textContent = loading ? "Drawing…" : "Draw";
+      }
+
+      function sendPrompt() {
+        const prompt = promptInput.value.trim();
+        const model = document.getElementById("model-select").value;
+        if (!prompt || !ws || ws.readyState !== WebSocket.OPEN) return;
+        setLoading(true);
+        ws.send(JSON.stringify({ type: "prompt", prompt, model }));
+      }
+
+      drawBtn.addEventListener("click", sendPrompt);
+      clearBtn.addEventListener("click", () => {
+        clearCanvas();
+        setStatus("Cleared", "");
+      });
+      promptInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendPrompt();
+      });
+    </script>
+  </body>
+</html>
